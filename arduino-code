@@ -1,0 +1,367 @@
+#define DIR_PIN 2
+#define STEP_PIN 3
+//KNAPP
+const byte knapp = 9; //FIX
+//LED PINS
+const byte LED_R = 4;
+const byte LED_G1 = 5;
+const byte LED_G2 = 6;
+const byte LED_GR = 7;
+//Hvor lenge de skal blinke
+const unsigned long R_interval = 1345UL;
+const unsigned long G1_interval = 988UL;
+const unsigned long G2_interval = 1166UL;
+const unsigned long GR_interval = 1657UL;
+//Timer
+unsigned long R_timer = 0;
+unsigned long G1_timer = 0;
+unsigned long G2_timer = 0;
+unsigned long GR_timer = 0;
+//LEDs state
+int RLEDState = LOW;
+int G1LEDState = LOW;
+int G2LEDState = LOW;
+int GRLEDState = LOW;
+
+unsigned long currentMillis = 0;
+unsigned long previousMillis = 0;
+unsigned long previousMillis2 = 0;
+unsigned long blinkePaMillis = 0;
+unsigned long blinkeAvMillis = 0;
+int state = 0; // SKAL VÆRE 0
+
+void setup() {
+  Serial.begin(9600);
+  //Keyboard.begin();   //Trenger ikke??
+  //Mouse.begin();      //Trenger ikke??
+  pinMode(DIR_PIN, OUTPUT);
+  pinMode(STEP_PIN, OUTPUT);
+  pinMode(knapp, INPUT);
+  pinMode(LED_R, OUTPUT);
+  pinMode(LED_G1, OUTPUT);
+  pinMode(LED_G2, OUTPUT);
+  pinMode(LED_GR, OUTPUT);
+  R_timer = millis();
+  G1_timer = millis();
+  G2_timer = millis();
+  GR_timer = millis();
+  while (!Serial);
+  Serial.println("Gaar til STATE: 0");
+}
+
+void loop(){
+  switch(state){
+  case 0:             	//IDLE
+    blinkTilfeldig();
+    break;
+  case 1:            	//Knapp er trykket, sikker
+    startSjekk();
+    break;
+  case 2:
+    startAlt();          //Knapp trykket x2, starter scan etc
+    break;
+  case 3:
+    skanect();
+    break;
+  case 999:
+    knappTest();
+    break;
+    case 666:
+    musTester();
+    break;
+  }
+}
+void blinkTilfeldig(){  //STATE = 0
+  //ROD LED
+  if ( (millis () - R_timer) >= R_interval ) {
+    // It is time to change state. Calculate next state.
+    if (RLEDState == LOW)
+      RLEDState = HIGH ;
+    else
+      RLEDState = LOW ;
+    // Write new state
+    digitalWrite (LED_R, RLEDState ) ;
+    // Reset timer
+    R_timer = millis ();
+  }
+  //GUL 1 LED
+  if ( (millis () - G1_timer) >= G1_interval ) {
+    if (G1LEDState == LOW)
+      G1LEDState = HIGH;
+    else
+      G1LEDState = LOW;
+    digitalWrite (LED_G1, G1LEDState );
+    G1_timer = millis ();
+  }
+  //GUL 2 LED
+  if ( (millis () - G2_timer) >= G2_interval ) {
+    if (G2LEDState == LOW)
+      G2LEDState = HIGH ;
+    else
+      G2LEDState = LOW ;
+    digitalWrite (LED_G2, G2LEDState );
+    G2_timer = millis ();
+  }
+  //GRONN LED
+  if ( (millis () - GR_timer) >= GR_interval ) {
+    if (GRLEDState == LOW)
+      GRLEDState = HIGH;
+    else
+      GRLEDState = LOW;
+    digitalWrite (LED_GR, GRLEDState );
+    GR_timer = millis ();
+  }
+  Serial.print("Knapp: ");
+  Serial.println(digitalRead(knapp));
+  if(digitalRead(knapp) == HIGH){
+    state = 1; //SKAL VÆRE 1
+    digitalWrite(LED_R, LOW);
+    digitalWrite(LED_G1, LOW);
+    digitalWrite(LED_G2, LOW);
+    digitalWrite(LED_GR, LOW);
+    previousMillis = millis();
+    blinkeAvMillis = millis();
+    previousMillis2 = millis();
+    Serial.println(digitalRead(knapp));
+    Serial.println("Gaar til STATE: 1");
+  }
+}
+//Dobbeltsjekk for start (10 sekunder)
+void startSjekk(){  //STATE = 1
+  if(digitalRead(knapp) == HIGH && millis() - previousMillis2 >= 1000){
+    Serial.println("Gaar til STATE: 2");
+    state = 2 ; //Skal være 2
+  }
+  else if(millis() - previousMillis >= 10000){
+    Serial.println("Gaar tilbake til IDLE");
+    state = 0;
+  }
+  if(digitalRead(LED_R) == LOW && millis() - blinkeAvMillis >= 1000){
+    digitalWrite(LED_R, HIGH);
+    digitalWrite(LED_G1, HIGH);
+    digitalWrite(LED_G2, HIGH);
+    digitalWrite(LED_GR, HIGH);
+    blinkePaMillis = millis();
+  }
+  else if(digitalRead(LED_R) == HIGH && millis() - blinkePaMillis >= 1000){
+    digitalWrite(LED_R, LOW);
+    digitalWrite(LED_G1, LOW);
+    digitalWrite(LED_G2, LOW);
+    digitalWrite(LED_GR, LOW);
+    blinkeAvMillis = millis();  
+  }
+}
+//Starter motor
+void startAlt(){   //STATE = 2
+  Serial.println("START SCAN!");
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G1, LOW);
+  digitalWrite(LED_G2, LOW);
+  digitalWrite(LED_GR, LOW);
+  hentSkanect();
+ delay(100);
+  startScan();
+  delay(4500); // SPØRS PÅ SKANECT INNSTILLINGER
+
+  rotateDeg(360, .1);
+  delay(2000);
+  state = 3;  //SKAL VÆRE 0 ELLER VIDERE TIL KEYBOARD/MOUSE KONTROLLLLL
+  Serial.println("Gaar til STATE: 0");
+}
+
+//HENTER OPP SKANECT
+void hentSkanect(){
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(10,100,0);
+  Mouse.move(0,100,0);
+  Mouse.move(0,100,0);
+  Mouse.move(0,100,0);
+  Mouse.move(0,100,0);
+  delay(100);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  
+  Mouse.move(-100,0,0);
+  Mouse.move(-100,0,0);
+  Mouse.move(-10,-100,0);
+  Mouse.move(0,-100,0);
+  Mouse.move(0,-100,0);
+  Mouse.move(0,-100,0);
+  Mouse.move(0,-100,0);
+  delay(100);
+  
+  }
+//STARTER SCAN
+void startScan(){
+  // Beveger seg til start knapp
+  Mouse.move(0,47,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(45,0,0);
+  Mouse.press();
+  delay(5);
+  Mouse.release();
+  Mouse.move(0,-8,0);
+}
+
+void skanect(){  //STATE = 3
+  //Stopper scan
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+
+  //Process
+  delay(7000);
+  Mouse.move(0,-25,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.move(100,0,0);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  delay(1000);
+
+  //Move and crop
+  Mouse.move(-100,-10,0);
+  delay(500);
+  Mouse.move(-100,0,0);
+  delay(500);
+  Mouse.move(-100,0,0);
+  delay(500);
+  Mouse.move(0,100,0);
+  delay(500);
+  Mouse.move(0,40,0);
+  delay(500);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+
+  //Croppe figur
+  Mouse.move(100,0,0);
+  delay(500);
+  Mouse.move(0,-70,0);
+  delay(500);
+  Mouse.move(24,0,0); // var på 20!
+  delay(500);
+
+  //Trykker på Rx
+  Mouse.press();
+  delay(150);
+  Mouse.release();  
+  delay(300);
+
+  //Flytter til Ty SKAL VÆRE 36%!! Trykker på Ty, må litt høyere!!
+  Mouse.move(0,50,0);
+  delay(500);
+  Mouse.move(-37,0,0);
+  delay(500);
+  Mouse.press();
+  delay(150);
+  Mouse.release();  
+  delay(500);
+  Mouse.move(0,20,0);
+  delay(500);
+
+  //Trykker på crop
+  Mouse.press();
+  delay(150);
+  Mouse.release(); 
+
+  //Flytter og trykker påremove parts 
+/*  Mouse.move(-100,0,0);delay(500);
+  Mouse.move(0,40,0);delay(500);
+  Mouse.press();
+  delay(50);
+  Mouse.release();*/
+  
+  // Remove parts  
+  //Colorize
+  Mouse.move(-100,0,0);
+  delay(500);
+  Mouse.move(0,40,0);
+  delay(500);
+  Mouse.move(10,35,0);
+  delay(50);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  delay(50);
+  Mouse.move(70,-93,0);
+  delay(1000);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  delay(1000);
+  
+  //Flytter til Move & crop for å sette figuren i midten
+  Mouse.move(-50,50,0);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  delay(500);
+  Mouse.move(50,-38,0);
+  delay(500);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  delay(1000);
+  Mouse.move(-50,38,0);
+  delay(500);
+  Mouse.press();
+  delay(50);
+  Mouse.release();
+  
+  
+  
+  //Heve modellen!
+  state = 0;
+}
+//RoteringsMetoden
+
+void rotateDeg(float deg, float speed){ 
+  //rotate a specific number of degrees (negitive for reverse movement)
+  //speed is any number from .01 -> 1 with 1 being fastest - Slower is stronger
+  int dir = (deg > 0)? HIGH:LOW;
+  digitalWrite(DIR_PIN,dir); 
+
+  int steps = abs(deg)*(1/0.225);
+  float usDelay = (1/speed) * 70;
+
+  int halv = steps/2;
+  int kvart = halv/2;
+
+  for(int i=0; i < steps; i++){ 
+    digitalWrite(STEP_PIN, HIGH); 
+    delayMicroseconds(usDelay);
+
+    digitalWrite(STEP_PIN, LOW); 
+    delayMicroseconds(usDelay); 
+
+    delay(25);
+
+    if(i >= 1) digitalWrite(LED_R, HIGH);
+    if(i >= 0+kvart) digitalWrite(LED_G1, HIGH);
+    if(i >= halv+kvart) digitalWrite(LED_G2, HIGH);
+    if(i >= steps-5) digitalWrite(LED_GR, HIGH);
+  } 
+}
+
+void knappTest(){
+  Serial.println(digitalRead(knapp)); 
+  delay(100);
+  if(digitalRead(knapp) == HIGH) skanect();
+}
+
+void musTester(){
+hentSkanect();
+startScan();
+delay(2000);
+skanect();
+state = 0;
+}
